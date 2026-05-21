@@ -1,259 +1,373 @@
-# PRACTICA GRUPAL - DESARROLLO WEB - S7
-## Integrantes
-- Alarcón Mendoza Estiven Rodrigo
-- Calderón Leiva Anna Olenka
-- Cruz Cruz Alexander Jhon
-- Martínez Casas Cristhian Emilio
+# Dev Task Board — Práctica Semana 07
 
+Dashboard de Gestión de Tareas Dev construido con React Hooks.  
+Asignatura: Desarrollo de Aplicaciones Web (IS093A) · Unidad I: Frontend.
 
-# QA & Hook Validator
+---
 
-## 1) Introduccion tecnica del rol
-El rol **QA & Hook Validator** en un proyecto React se enfoca en validar el uso correcto de Hooks, la coherencia del ciclo de vida del componente y la calidad del codigo. Su objetivo es prevenir efectos secundarios inesperados, renders innecesarios y errores sutiles que suelen aparecer cuando se incumplen las reglas de Hooks o se ignoran advertencias de ESLint. Este rol combina revision estatica (linting), verificacion de buenas practicas y analisis de rendimiento con herramientas como React DevTools Profiler.
+## Instalación
 
-## 2) Objetivo del aseguramiento de calidad en React
-- Garantizar el cumplimiento de las reglas de Hooks.
-- Reducir fallos en tiempo de ejecucion por dependencias incorrectas.
-- Mantener consistencia en el ciclo de vida con `useEffect` y su cleanup.
-- Prevenir renders innecesarios mediante memoizacion y callbacks estables.
-- Asegurar un estilo de codigo mantenible, documentado y verificable.
-
-## 3) Reglas de Hooks (explicacion detallada)
-Las reglas de Hooks son estrictas porque React depende del orden de ejecucion de los Hooks para asignar estados correctamente.
-
-1. **Solo llamar Hooks en el nivel superior**
-   - No llamar Hooks dentro de condiciones, bucles o funciones anidadas.
-   - Razon: React debe llamar Hooks en el mismo orden en cada render.
-
-2. **Solo llamar Hooks en funciones React**
-   - Componentes funcionales o custom hooks.
-   - Razon: React solo administra su ciclo de vida en esos contextos.
-
-## 4) Ejemplos correctos e incorrectos
-
-### Correcto (del proyecto): Hooks al nivel superior
-Ejemplo real en [src/components/AddTaskForm.jsx](src/components/AddTaskForm.jsx):
-```jsx
-import { useState, useRef, useEffect } from 'react'
-
-export default function AddTaskForm({ onAdd }) {
-  const [title, setTitle] = useState('')
-  const [category, setCategory] = useState('frontend')
-  const [priority, setPriority] = useState('media')
-  const inputRef = useRef(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
-
-  // ...
-}
+```bash
+git clone https://github.com/AnnaOlenka/repo_practica07_grupal.git
+cd repo_practica07_grupal
+npm install
+npm run dev
 ```
 
-### Correcto (del proyecto): memorizacion y callbacks estables
-Ejemplo real en [src/components/TaskList.jsx](src/components/TaskList.jsx):
-```jsx
-const processedTasks = useMemo(() => {
-  let result = [...items]
-  // ... filtros y orden
-  return result
-}, [items, filter, sortBy, sortOrder])
+Abrir `http://localhost:5173` en el navegador.
 
-const handleRemove = useCallback((id) => actions.removeTask(id), [actions])
+---
+
+## Diagrama de flujo de estado y ciclo de render
+
+### Flujo principal — useReducer
+
+```mermaid
+flowchart TD
+    U([Usuario]) -->|click / input| C[Componente]
+    C -->|dispatch action| R[tasksReducer]
+    R -->|retorna nuevo estado\ninmutable spread | S[(state)]
+    S -->|re-render| C
+
+    subgraph Estado [Estado global · useTasksReducer.js]
+        S
+        S --> IT[items: Task]
+        S --> FI[filter: string]
+        S --> SB[sortBy: string]
+        S --> SO[sortOrder: asc·desc]
+    end
+
+    subgraph Acciones [8 Action Types]
+        A1[ADD_TASK]
+        A2[REMOVE_TASK]
+        A3[MOVE_STATUS]
+        A4[UPDATE_PRIORITY]
+        A5[SET_FILTER]
+        A6[SET_SORT_BY]
+        A7[SET_SORT_ORDER]
+        A8[CLEAR_COMPLETED]
+    end
+
+    C --> Acciones
+    Acciones --> R
 ```
 
-### Incorrecto (anti-ejemplo basado en el proyecto)
-Si se moviera un Hook dentro de `handleSubmit` en AddTaskForm, se rompe la regla:
-```jsx
-function AddTaskForm({ onAdd }) {
-  const handleSubmit = (e) => {
-    const [title, setTitle] = useState('')
-    e.preventDefault()
-    // ...
+---
+
+### Ciclo de render por componente
+
+```mermaid
+sequenceDiagram
+    participant U  as Usuario
+    participant AP as App
+    participant TL as TaskList
+    participant MI as MemoizedTaskItem
+    participant SC as StatCards
+    participant FP as FilterPanel
+
+    Note over AP: useReducer(tasksReducer, initialState)
+
+    U->>AP: addTask / removeTask / moveStatus
+    AP->>TL: items, filter, sortBy, sortOrder
+    TL->>TL: useMemo → processedTasks recalcula
+    TL->>MI: solo el item afectado se re-renderiza
+    AP->>SC: items
+    SC->>SC: useMemo → renderedStats recalcula
+    AP->>FP: filter, sortBy, sortOrder
+
+    Note over MI: memo() evita renders\nde items no modificados
+
+    U->>AP: toggleTheme
+    AP->>AP: useEffect → body.setAttribute\n+ localStorage.setItem
+```
+
+---
+
+### Árbol de componentes y hooks
+
+```mermaid
+graph TD
+    App["App\n(ThemeProvider)"]
+    App --> Dashboard
+
+    Dashboard["Dashboard\nuseTasksReducer\nuseTheme"]
+    Dashboard --> SC["StatCards\nuseMemo"]
+    Dashboard --> ATF["AddTaskForm\nuseState × 3\nuseRef\nuseEffect mount"]
+    Dashboard --> FP["FilterPanel\nuseCallback × 4"]
+    Dashboard --> TL["TaskList (Profiler)\nuseMemo\nuseCallback × 3"]
+    TL --> MI["MemoizedTaskItem\nmemo()"]
+
+    TC["ThemeContext\nuseState\nuseEffect × 2\nuseTheme custom hook"]
+    App --> TC
+```
+
+---
+
+## Justificación técnica de cada hook
+
+### `useReducer` — `src/hooks/useTasksReducer.js`
+
+**¿Por qué no useState simple?**
+
+El estado contiene cuatro sub-valores relacionados (`items`, `filter`, `sortBy`, `sortOrder`). Con `useState` independiente se necesitarían cuatro setters y la lógica de transición estaría dispersa en cada componente. Además, acciones como `ADD_TASK` dependen del estado anterior (`[...state.items, nuevo]`) y requieren inmutabilidad estricta, lo que `useReducer` fuerza por diseño.
+
+```js
+// Reducer puro — cero mutaciones directas
+case ACTIONS.ADD_TASK:
+  return { ...state, items: [...state.items, { id: Date.now(), ...payload }] }
+
+case ACTIONS.MOVE_STATUS:
+  return {
+    ...state,
+    items: state.items.map(item =>
+      item.id === payload.id ? { ...item, status: payload.status } : item
+    )
   }
+```
+
+Las acciones son constantes exportadas (`ACTIONS`). Los action creators se agrupan en `buildActions(dispatch)` y se memorizan con `useMemo(() => buildActions(dispatch), [dispatch])` para que su referencia sea estable.
+
+---
+
+### `useState` — `src/components/AddTaskForm.jsx` y `src/contexts/ThemeContext.jsx`
+
+**¿Por qué useState aquí y no useReducer?**
+
+En `AddTaskForm` el estado (`title`, `category`, `priority`) es local al formulario, sin lógica compleja de transición ni necesidad de compartirse. `useState` es suficiente. En `ThemeContext` hay un único valor (`theme`) con una sola transición, por lo que agregar un reducer sería sobreingeniería.
+
+```js
+// ThemeContext — lazy initializer para evitar re-render inicial
+const [theme, setTheme] = useState(() => {
+  const saved = localStorage.getItem('theme')
+  if (saved) return saved
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+})
+```
+
+El lazy initializer (`() => ...`) garantiza que `localStorage` se lee solo una vez al montar, no en cada render.
+
+---
+
+### `useContext` / `useTheme` — `src/contexts/ThemeContext.jsx` y `src/App.jsx`
+
+**¿Por qué no prop drilling?**
+
+`theme` y `toggleTheme` se necesitan en `Dashboard` (para la clase CSS raíz) y en el `header` (para el botón de toggle). Sin contexto habría que pasar props a través de múltiples niveles. `useContext` los hace disponibles directamente.
+
+Se encapsuló en un custom hook `useTheme()` que lanza un error descriptivo si se usa fuera del `<ThemeProvider>`:
+
+```js
+export const useTheme = () => {
+  const ctx = useContext(ThemeContext)
+  if (!ctx) throw new Error('useTheme debe usarse dentro de <ThemeProvider>')
+  return ctx
 }
 ```
-Este patron no aparece en el proyecto y se evita por la regla `react-hooks/rules-of-hooks`.
 
-## 5) ESLint y su importancia
-ESLint analiza el codigo de forma estatica para detectar errores comunes, incumplimientos de estilo y malas practicas antes de ejecutar la aplicacion. En React, su valor principal es:
-- Advertir sobre uso incorrecto de Hooks.
-- Detectar dependencias faltantes en `useEffect`.
-- Mantener un estandar de calidad uniforme en el equipo.
+---
 
-## 6) Reglas especificas: react-hooks/rules-of-hooks
-Esta regla obliga a que:
-- Los Hooks se llamen en el nivel superior.
-- Los Hooks se llamen solo en componentes o custom hooks.
+### `useEffect` — `src/contexts/ThemeContext.jsx` y `src/components/AddTaskForm.jsx`
 
-**Ejemplo de fallo:** usar un Hook dentro de un `if` o dentro de una funcion anidada.
+**Efecto 1 — Sincronizar tema con DOM y localStorage**
 
-## 7) Reglas especificas: react-hooks/exhaustive-deps
-Valida la lista de dependencias en `useEffect`, `useMemo` y `useCallback`.
-- Si se usa un valor en el efecto, debe estar en el array de dependencias.
-- Evita closures obsoletas y sincroniza correctamente el estado.
-
-**Ejemplo real (correcto) en [src/contexts/ThemeContext.jsx](src/contexts/ThemeContext.jsx):**
-```jsx
+```js
 useEffect(() => {
   document.body.setAttribute('data-theme', theme)
   localStorage.setItem('theme', theme)
-}, [theme])
-```
-**Anti-ejemplo (faltaria `theme` en dependencias):**
-```jsx
-useEffect(() => {
-  document.body.setAttribute('data-theme', theme)
-}, [])
+}, [theme]) // solo se ejecuta cuando theme cambia
 ```
 
-## 8) Warnings comunes y como solucionarlos
-- **Missing dependency**: agregar la variable al array de dependencias.
-- **Hook used conditionally**: mover el Hook al nivel superior.
-- **Stale closure**: usar dependencias correctas o `useRef`.
-- **Excessive re-renders**: revisar estado derivado y memoizacion.
+La dependencia `[theme]` evita ejecuciones innecesarias. No hay cleanup porque no registra suscripciones ni crea recursos asíncronos.
 
-## 9) Custom Hook implementado (ejemplo tecnico)
-El proyecto implementa `useTasksReducer` para encapsular reducer + acciones. Ejemplo real en [src/hooks/useTasksReducer.js](src/hooks/useTasksReducer.js):
+**Efecto 2 — Sincronización entre pestañas (cross-tab)**
 
-```jsx
-import { useReducer, useMemo } from 'react'
-
-export function useTasksReducer() {
-  const [state, dispatch] = useReducer(tasksReducer, initialState)
-  const actions = useMemo(() => buildActions(dispatch), [dispatch])
-  return { state, dispatch, actions }
-}
-```
-
-**Validacion QA:**
-- Cumple reglas de Hooks.
-- Dependencias declaradas correctamente (`useMemo`).
-- API estable y documentada.
-
-## 10) useEffect y cleanup
-En el proyecto, el cleanup se usa para eliminar listeners del navegador. Ejemplo real en [src/contexts/ThemeContext.jsx](src/contexts/ThemeContext.jsx):
-
-```jsx
+```js
 useEffect(() => {
   const handleStorage = (e) => {
-    if (e.key === 'theme' && e.newValue) {
-      setTheme(e.newValue)
-    }
+    if (e.key === 'theme' && e.newValue) setTheme(e.newValue)
   }
   window.addEventListener('storage', handleStorage)
-  return () => window.removeEventListener('storage', handleStorage)
-}, [])
+  return () => window.removeEventListener('storage', handleStorage) // cleanup
+}, []) // [] → se registra al montar, se limpia al desmontar
 ```
 
-## 11) React DevTools Profiler
-El proyecto ya integra `Profiler` en el render de la lista de tareas, en [src/App.jsx](src/App.jsx):
+El `return` de cleanup evita memory leaks: si el `ThemeProvider` se desmonta, el listener se elimina. El array vacío garantiza que solo se registra una vez.
 
-```jsx
+**Efecto 3 — Auto-focus al montar el formulario**
+
+```js
+// AddTaskForm.jsx
+useEffect(() => {
+  inputRef.current?.focus()
+}, []) // ejecuta una sola vez al montar el componente
+```
+
+---
+
+### `useMemo` — `src/components/TaskList.jsx` y `src/components/StatCards.jsx`
+
+**¿Por qué no calcular en cada render?**
+
+`processedTasks` aplica filtro y ordenamiento sobre toda la lista. Sin `useMemo`, este cálculo se repetiría en cada render aunque solo cambie el tema o algún prop no relacionado.
+
+```js
+// TaskList.jsx
+const processedTasks = useMemo(() => {
+  let result = [...items] // copia inmutable
+  if (filter !== 'all') {
+    result = result.filter(t => isStatus ? t.status === filter : t.priority === filter)
+  }
+  result.sort((a, b) => { /* comparación por campo */ })
+  return result
+}, [items, filter, sortBy, sortOrder])
+```
+
+```js
+// StatCards.jsx — evita recalcular los 4 contadores en cada render
+const renderedStats = useMemo(
+  () => STATS.map(stat => ({ ...stat, value: stat.getValue(items) })),
+  [items]
+)
+```
+
+```js
+// useTasksReducer.js — estabiliza el objeto actions entre renders
+const actions = useMemo(() => buildActions(dispatch), [dispatch])
+```
+
+---
+
+### `useCallback` — `src/components/TaskList.jsx` y `src/components/FilterPanel.jsx`
+
+**¿Por qué no funciones inline?**
+
+Las funciones inline crean una nueva referencia en cada render. Al pasarlas como props a `MemoizedTaskItem` (envuelto en `memo()`), una nueva referencia rompe la memoización y fuerza re-renders innecesarios. `useCallback` mantiene la referencia estable mientras no cambien las dependencias.
+
+```js
+// TaskList.jsx
+const handleRemove         = useCallback((id) => actions.removeTask(id), [actions])
+const handleMoveStatus     = useCallback((id, status) => actions.moveStatus(id, status), [actions])
+const handleUpdatePriority = useCallback((id, priority) => actions.updatePriority(id, priority), [actions])
+
+// FilterPanel.jsx
+const handleFilter   = useCallback((value) => actions.setFilter(value), [actions])
+const handleSortBy   = useCallback((value) => actions.setSortBy(value), [actions])
+const toggleOrder    = useCallback(() => actions.setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'), [actions, sortOrder])
+const clearCompleted = useCallback(() => actions.clearCompleted(), [actions])
+```
+
+---
+
+### `useRef` — `src/components/AddTaskForm.jsx`
+
+**¿Por qué no estado?**
+
+`useRef` persiste la referencia al nodo DOM entre renders **sin disparar un re-render** cuando se modifica. Si se almacenara como `useState`, cada asignación provocaría un ciclo de render innecesario.
+
+Usos concretos:
+- Al montar el componente (`useEffect([], [])`) → auto-focus inicial
+- Al enviar el formulario → vuelve el foco al input para permitir agregar tareas en serie sin usar el mouse
+
+```js
+const inputRef = useRef(null)
+
+// Al montar
+useEffect(() => { inputRef.current?.focus() }, [])
+
+// Tras submit
+onAdd(trimmed, category, priority)
+setTitle('')
+inputRef.current?.focus()
+
+// En JSX
+<input ref={inputRef} placeholder="Nueva tarea..." />
+```
+
+---
+
+### `memo()` y `Profiler` — `src/components/TaskList.jsx` y `src/App.jsx`
+
+`TaskItem` se envuelve en `memo()` para que React omita su re-render si sus props no cambian. Esto es efectivo gracias a los `useCallback` en los handlers: referencia estable de props = sin render extra.
+
+```js
+const MemoizedTaskItem = memo(TaskItem)
+```
+
+`Profiler` envuelve `<TaskList>` en App.jsx y registra en consola el tiempo real de cada commit:
+
+```js
 <Profiler
   id="TaskList"
   onRender={(id, phase, actualDuration) =>
     console.debug(`[Profiler:${id}] ${phase} took ${actualDuration.toFixed(1)}ms`)
   }
 >
-  <TaskList
-    items={state.items}
-    filter={state.filter}
-    sortBy={state.sortBy}
-    sortOrder={state.sortOrder}
-    actions={actions}
-  />
+  <TaskList ... />
 </Profiler>
 ```
 
-Esto permite medir la duracion de renders de `TaskList` y validar optimizaciones.
+---
 
-## 12) Validacion de renders y rendimiento
-Ejemplos reales aplicados:
-- `useMemo` para el procesamiento de tareas en [src/components/TaskList.jsx](src/components/TaskList.jsx).
-- `useCallback` para handlers estables en [src/components/TaskList.jsx](src/components/TaskList.jsx).
-- `memo` para evitar renders innecesarios en `TaskItem` (mismo archivo).
-- `useMemo` para estadisticas en [src/components/StatCards.jsx](src/components/StatCards.jsx).
+## React DevTools Profiler
 
-## 13) Buenas practicas aplicadas
-- Hooks al nivel superior.
-- `useEffect` con dependencias completas.
-- Cleanup en efectos con timers o listeners.
-- Custom hooks para encapsular logica.
-- Documentacion tecnica clara.
+### Cómo grabar
 
-## 14) Justificacion del archivo ESLint
-```js
-module.exports = {
-  root: true,
-  env: {
-    browser: true,
-    es2021: true,
-  },
+1. Instalar la extensión **React Developer Tools** en Chrome/Firefox.
+2. Abrir DevTools → pestaña **Profiler**.
+3. Hacer clic en ⏺ **Record**, interactuar con la app (agregar, filtrar, cambiar prioridad), detener la grabación.
 
-  extends: [
-    "eslint:recommended",
-    "plugin:react/recommended",
-    "plugin:react-hooks/recommended",
-  ],
+### Qué analizar
 
-  parserOptions: {
-    ecmaVersion: "latest",
-    sourceType: "module",
-    ecmaFeatures: {
-      jsx: true,
-    },
-  },
+| Métrica | Dónde verla | Qué indica |
+|---|---|---|
+| **Commit duration** | Barra superior del flamegraph | Tiempo total de render por interacción |
+| **Render reason** | Hover sobre un componente | Props changed / State changed / Hooks changed |
+| **Componentes grises** | Flamegraph | No se re-renderizaron (memo efectivo) |
+| **Why did this render?** | Panel derecho al seleccionar componente | Razón exacta del re-render |
 
-  settings: {
-    react: {
-      version: "detect",
-    },
-  },
+### Resultados esperados tras optimizaciones
 
-  plugins: ["react", "react-hooks"],
+Después de aplicar `memo()` + `useCallback`, al cambiar la prioridad de **un** item:
 
-  rules: {
-    // Hooks
-    "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "warn",
+- `MemoizedTaskItem` del item afectado → **re-render** (props cambiaron)
+- `MemoizedTaskItem` de los demás items → **sin render** (props estables)
+- `StatCards` → **sin render** (items no cambió en longitud, solo en prioridad)
 
-    // React 17+ JSX Transform
-    "react/react-in-jsx-scope": "off",
+> **Capturas del Profiler:** _(agregar screenshots aquí tras grabar una sesión)_
 
-    // Desactivar prop-types
-    "react/prop-types": "off",
-  },
-};
+---
+
+## Estructura del proyecto
+
+```
+src/
+├── App.jsx                    # Raíz: ThemeProvider + Dashboard + Profiler
+├── index.css                  # Variables CSS (dark/light theme via data-theme)
+├── main.jsx
+├── contexts/
+│   └── ThemeContext.jsx        # createContext, useState, useEffect ×2, useTheme hook
+├── hooks/
+│   └── useTasksReducer.js     # useReducer, 8 action types, reducer inmutable, useMemo actions
+└── components/
+    ├── Icons.jsx               # SVGs puros, sin dependencias
+    ├── StatCards.jsx           # useMemo para contadores
+    ├── FilterPanel.jsx         # useCallback para handlers de filtro/orden
+    ├── AddTaskForm.jsx         # useState ×3, useRef, useEffect mount
+    └── TaskList.jsx            # useMemo processedTasks, useCallback handlers, memo(TaskItem)
 ```
 
-**Justificacion tecnica por regla:**
-- `root: true`: evita heredar configuraciones externas.
-- `env.browser`: habilita globals del navegador.
-- `env.es2021`: habilita sintaxis moderna.
-- `eslint:recommended`: base de reglas esenciales.
-- `plugin:react/recommended`: reglas especificas de React.
-- `plugin:react-hooks/recommended`: activa reglas criticas de Hooks.
-- `ecmaVersion: latest`: soporta caracteristicas recientes de JS.
-- `sourceType: module`: habilita `import/export`.
-- `jsx: true`: habilita JSX.
-- `react.version: detect`: auto-deteccion de version de React.
-- `react-hooks/rules-of-hooks: error`: rompe build si se violan reglas.
-- `react-hooks/exhaustive-deps: warn`: avisa dependencias faltantes.
-- `react/react-in-jsx-scope: off`: React 17+ no requiere `import React`.
-- `react/prop-types: off`: se desactiva en proyectos sin PropTypes.
+---
 
-## 15) Conclusiones tecnicas del QA
-El control estricto de Hooks y ESLint reduce errores de sincronizacion, asegura estabilidad del ciclo de vida y mejora el rendimiento. Un QA enfocado en Hooks garantiza que el codigo sea predecible, mantenible y medible.
+## Hooks utilizados — resumen
 
-## 16) Checklist final de validacion
-- [ ] Hooks siempre al nivel superior.
-- [ ] Hooks solo en componentes o custom hooks.
-- [ ] Dependencias de `useEffect` completas.
-- [ ] Cleanup en efectos con suscripciones o timers.
-- [ ] Callbacks memoizados cuando se pasan a hijos.
-- [ ] `useMemo` aplicado en calculos costosos.
-- [ ] Sin warnings de ESLint en Hooks.
-- [ ] Verificacion con React DevTools Profiler.
-- [ ] Custom hooks documentados.
-- [ ] Rendimiento validado en renders clave.
+| Hook | Archivo(s) | Propósito |
+|---|---|---|
+| `useReducer` | `useTasksReducer.js` | Estado global de tareas con 8 acciones |
+| `useState` | `ThemeContext.jsx`, `AddTaskForm.jsx` | Estado de tema y estado local del formulario |
+| `useContext` / `useTheme` | `ThemeContext.jsx`, `App.jsx` | Tema claro/oscuro sin prop drilling |
+| `useEffect` ×3 | `ThemeContext.jsx` (×2), `AddTaskForm.jsx` | Sync DOM+storage, cross-tab listener, auto-focus |
+| `useMemo` ×3 | `TaskList.jsx`, `StatCards.jsx`, `useTasksReducer.js` | Filtrado/orden, contadores, actions estables |
+| `useCallback` ×7 | `TaskList.jsx`, `FilterPanel.jsx` | Handlers estables para memo() |
+| `useRef` | `AddTaskForm.jsx` | Focus DOM sin re-render |
+| `memo()` | `TaskList.jsx` | Omitir re-renders de items no modificados |
+| `Profiler` | `App.jsx` | Medir tiempo de render de TaskList en consola |
