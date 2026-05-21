@@ -1,4 +1,4 @@
-import { useReducer } from 'react'
+import { useReducer, useMemo } from 'react'
 
 // ─── Action Types ────────────────────────────────────────────────────────────
 export const ACTIONS = {
@@ -176,6 +176,6 @@ function buildActions(dispatch) {
 // ─── Custom Hook ──────────────────────────────────────────────────────────────
 export function useTasksReducer() {
   const [state, dispatch] = useReducer(tasksReducer, initialState)
-  const actions = buildActions(dispatch)
+  const actions = useMemo(() => buildActions(dispatch), [dispatch])
   return { state, dispatch, actions }
 }

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { IconArrowUp, IconArrowDown } from './Icons'
 
 const PRIORITY_DOT = {
@@ -23,6 +24,14 @@ const SORT_OPTIONS = [
 ]
 
 export default function FilterPanel({ filter, sortBy, sortOrder, actions }) {
+  const handleFilter = useCallback((value) => actions.setFilter(value), [actions])
+  const handleSortBy = useCallback((value) => actions.setSortBy(value), [actions])
+  const toggleOrder = useCallback(
+    () => actions.setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'),
+    [actions, sortOrder]
+  )
+  const clearCompleted = useCallback(() => actions.clearCompleted(), [actions])
+
   return (
     <div className="filter-panel">
       <div className="filter-group">
@@ -32,7 +41,7 @@ export default function FilterPanel({ filter, sortBy, sortOrder, actions }) {
             <button
               key={f.value}
               className={`chip ${filter === f.value ? 'chip--active' : ''}`}
-              onClick={() => actions.setFilter(f.value)}
+              onClick={() => handleFilter(f.value)}
             >
               {f.dot && (
                 <span
@@ -51,7 +60,7 @@ export default function FilterPanel({ filter, sortBy, sortOrder, actions }) {
         <div className="sort-controls">
           <select
             value={sortBy}
-            onChange={(e) => actions.setSortBy(e.target.value)}
+            onChange={(e) => handleSortBy(e.target.value)}
             className="select"
           >
             {SORT_OPTIONS.map((o) => (
@@ -60,9 +69,7 @@ export default function FilterPanel({ filter, sortBy, sortOrder, actions }) {
           </select>
           <button
             className="btn-icon"
-            onClick={() =>
-              actions.setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
-            }
+            onClick={toggleOrder}
             title={sortOrder === 'asc' ? 'Ascendente' : 'Descendente'}
           >
             {sortOrder === 'asc' ? <IconArrowUp /> : <IconArrowDown />}
@@ -70,7 +77,7 @@ export default function FilterPanel({ filter, sortBy, sortOrder, actions }) {
         </div>
       </div>
 
-      <button className="btn-danger" onClick={actions.clearCompleted}>
+      <button className="btn-danger" onClick={clearCompleted}>
         Limpiar completadas
       </button>
     </div>

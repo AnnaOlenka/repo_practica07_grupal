@@ -1,3 +1,4 @@
+import { Profiler } from 'react'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { useTasksReducer } from './hooks/useTasksReducer'
 import StatCards from './components/StatCards'
@@ -52,13 +53,20 @@ function Dashboard() {
               <span className="task-count">{state.items.length}</span>
             </h2>
           </div>
-          <TaskList
-            items={state.items}
-            filter={state.filter}
-            sortBy={state.sortBy}
-            sortOrder={state.sortOrder}
-            actions={actions}
-          />
+          <Profiler
+            id="TaskList"
+            onRender={(id, phase, actualDuration) =>
+              console.debug(`[Profiler:${id}] ${phase} took ${actualDuration.toFixed(1)}ms`)
+            }
+          >
+            <TaskList
+              items={state.items}
+              filter={state.filter}
+              sortBy={state.sortBy}
+              sortOrder={state.sortOrder}
+              actions={actions}
+            />
+          </Profiler>
         </section>
       </main>
     </div>

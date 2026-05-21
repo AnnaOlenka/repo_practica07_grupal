@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, memo } from 'react'
 import { IconCircle, IconLoader, IconCheckCircle, IconX } from './Icons'
 
 const PRIORITY_ORDER = { alta: 0, media: 1, baja: 2 }
@@ -23,43 +23,47 @@ const StatusIcon = ({ status }) => {
   return <IconCircle size={17} />
 }
 
-const TaskItem = ({ task, onRemove, onMoveStatus, onUpdatePriority }) => (
-  <li className={`task-item task-item--${task.status}`}
-      style={{ borderLeftColor: PRIORITY_COLOR[task.priority] }}>
-    <div className="task-left">
-      <button
-        className={`status-btn status-btn--${task.status}`}
-        onClick={() => onMoveStatus(task.id, STATUS_CYCLE[task.status])}
-        title={`Pasar a: ${STATUS_CYCLE[task.status]}`}
-      >
-        <StatusIcon status={task.status} />
-      </button>
-      <div className="task-info">
-        <span className={`task-title ${task.status === 'hecho' ? 'task-title--done' : ''}`}>
-          {task.title}
-        </span>
-        <span className="task-category" style={{ color: CATEGORY_COLOR[task.category] }}>
-          {task.category}
-        </span>
+function TaskItem({ task, onRemove, onMoveStatus, onUpdatePriority }) {
+  return (
+    <li className={`task-item task-item--${task.status}`}
+        style={{ borderLeftColor: PRIORITY_COLOR[task.priority] }}>
+      <div className="task-left">
+        <button
+          className={`status-btn status-btn--${task.status}`}
+          onClick={() => onMoveStatus(task.id, STATUS_CYCLE[task.status])}
+          title={`Pasar a: ${STATUS_CYCLE[task.status]}`}
+        >
+          <StatusIcon status={task.status} />
+        </button>
+        <div className="task-info">
+          <span className={`task-title ${task.status === 'hecho' ? 'task-title--done' : ''}`}>
+            {task.title}
+          </span>
+          <span className="task-category" style={{ color: CATEGORY_COLOR[task.category] }}>
+            {task.category}
+          </span>
+        </div>
       </div>
-    </div>
-    <div className="task-right">
-      <select
-        className="select select--small priority-select"
-        value={task.priority}
-        style={{ borderColor: PRIORITY_COLOR[task.priority] }}
-        onChange={(e) => onUpdatePriority(task.id, e.target.value)}
-      >
-        <option value="alta">Alta</option>
-        <option value="media">Media</option>
-        <option value="baja">Baja</option>
-      </select>
-      <button className="btn-remove" onClick={() => onRemove(task.id)} title="Eliminar">
-        <IconX size={13} />
-      </button>
-    </div>
-  </li>
-)
+      <div className="task-right">
+        <select
+          className="select select--small priority-select"
+          value={task.priority}
+          style={{ borderColor: PRIORITY_COLOR[task.priority] }}
+          onChange={(e) => onUpdatePriority(task.id, e.target.value)}
+        >
+          <option value="alta">Alta</option>
+          <option value="media">Media</option>
+          <option value="baja">Baja</option>
+        </select>
+        <button className="btn-remove" onClick={() => onRemove(task.id)} title="Eliminar">
+          <IconX size={13} />
+        </button>
+      </div>
+    </li>
+  )
+}
+
+const MemoizedTaskItem = memo(TaskItem)
 
 export default function TaskList({ items, filter, sortBy, sortOrder, actions }) {
   const processedTasks = useMemo(() => {
@@ -98,7 +102,7 @@ export default function TaskList({ items, filter, sortBy, sortOrder, actions }) 
   return (
     <ul className="task-list">
       {processedTasks.map((task) => (
-        <TaskItem
+        <MemoizedTaskItem
           key={task.id}
           task={task}
           onRemove={handleRemove}

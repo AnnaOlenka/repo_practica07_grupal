@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 const CATEGORIES = ['frontend', 'backend', 'devops', 'diseño']
 const PRIORITIES = ['alta', 'media', 'baja']
@@ -7,8 +7,11 @@ export default function AddTaskForm({ onAdd }) {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('frontend')
   const [priority, setPriority] = useState('media')
-  // TODO (Optimizador): useRef para auto-focus al abrir el formulario
   const inputRef = useRef(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
 
   const handleSubmit = (e) => {
     e.preventDefault()

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { IconList, IconGear, IconCheck, IconAlert } from './Icons'
 
 const STATS = [
@@ -32,15 +33,26 @@ const STATS = [
 ]
 
 export default function StatCards({ items }) {
+  const renderedStats = useMemo(
+    () => STATS.map((stat) => ({
+      key: stat.key,
+      label: stat.label,
+      Icon: stat.Icon,
+      color: stat.color,
+      value: stat.getValue(items),
+    })),
+    [items]
+  )
+
   return (
     <div className="stat-cards">
-      {STATS.map((stat) => (
+      {renderedStats.map((stat) => (
         <div key={stat.key} className="stat-card" style={{ '--card-accent': stat.color }}>
           <span className="stat-icon" style={{ color: stat.color }}>
             <stat.Icon size={24} />
           </span>
           <div className="stat-info">
-            <span className="stat-value">{stat.getValue(items)}</span>
+            <span className="stat-value">{stat.value}</span>
             <span className="stat-label">{stat.label}</span>
           </div>
         </div>
