@@ -1,5 +1,4 @@
-import { useContext } from 'react'
-import { ThemeProvider, ThemeContext } from './contexts/ThemeContext'
+import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { useTasksReducer } from './hooks/useTasksReducer'
 import StatCards from './components/StatCards'
 import FilterPanel from './components/FilterPanel'
@@ -9,7 +8,7 @@ import { IconBolt, IconSun, IconMoon } from './components/Icons'
 
 function Dashboard() {
   const { state, actions } = useTasksReducer()
-  const { theme, toggleTheme } = useContext(ThemeContext)
+  const { theme, toggleTheme } = useTheme()
 
   return (
     <div className={`dashboard dashboard--${theme}`}>
